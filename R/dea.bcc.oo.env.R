@@ -1,0 +1,49 @@
+`dea.bcc.oo.env` <-
+function (X, Y) {
+  
+  X <- .primera (X);
+  Y <- .segunda (Y);
+  .check(X,Y);
+  
+  nombre.DMUs <- row.names(X);
+  nombre.inputs <- names(X);
+  nombre.outputs <- names(Y);
+
+  num.DMUs <- dim(X)[1];
+  num.inputs <- dim(X)[2];
+  num.outputs <- dim(Y)[2];
+
+  XX <- as.matrix(X);
+  YY <- as.matrix(Y);
+  ZZ <- double(num.DMUs * (num.DMUs + 2));
+  
+
+  resul <- .C( "bcc_oo_env",
+              as.character (nombre.DMUs),
+              as.integer (num.DMUs),
+              as.character (nombre.inputs),
+              as.integer (num.inputs),
+              as.character(nombre.outputs),
+              as.integer (num.outputs),
+              as.double (XX),
+              as.double (YY),
+              salida = as.double (ZZ),
+	      PACKAGE = "DEA");
+
+  resul <- resul$salida;
+  resul <- matrix(resul, num.DMUs , num.DMUs + 2 );
+
+  lambda <- data.frame( resul[ , 1:num.DMUs ] );
+  eff <- resul[ , num.DMUs+1 ];
+  slack <- resul[ , num.DMUs+2 ];
+  
+  row.names(lambda) <- nombre.DMUs;
+  nLs <- paste ( rep ("L.", num.DMUs) , nombre.DMUs , sep = "");
+  names(lambda) <- nLs;
+
+  names(eff) <- nombre.DMUs;
+  names(slack) <- nombre.DMUs;
+  list ( eff = eff , lambda = lambda , slack = slack );
+  
+}
+

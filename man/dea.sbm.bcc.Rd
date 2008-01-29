@@ -1,0 +1,33 @@
+\name{dea.sbm.bcc}
+\alias{dea.sbm.bcc}
+%- Also NEED an '\alias' for EACH other topic documented here.
+\title{ BCC slack-based measure of efficiency }
+\description{
+  Fits a slack-based DEA model with variable returns to scale. This model corresponds to eq. 4.48 in Cooper \emph{et al}., 2007 (see References) with the additional constraint \eqn{ \Sigma\lambda_{i}=1}.
+}
+\usage{
+dea.sbm.bcc(X, Y)
+}
+%- maybe also 'usage' for other objects documented here.
+\arguments{
+  \item{X}{ inputs. Bidimensional data frame or object that can be coerced to a data frame. Each row corresponds to a DMU, each column to an input. }
+  \item{Y}{ outputs. Bidimensional data frame or object that can be coerced to a data frame. Each row corresponds to a DMU, each column to an output. }
+}
+\details{
+  Missing values are not allowed.
+}
+\value{
+  a list with components:
+  \item{ro}{a vector containing the slack-based-measure of efficiency of the DMUs.}
+  \item{lambda}{a bidimensional data frame containing the  \eqn{\lambda} coefficients. Each row corresponds to a DMU. The columns correspond to the \eqn{\lambda}s.}
+  \item{slack}{a bidimensional data frame containing the slacks for each DMU. Each row corresponds to a DMU.}
+}
+\references{
+
+	Cooper, W. W., Seiford, L. M. and Tone, K.  (2007):
+	\emph{Data envelopment analysis: a comprehensive text with models, applications, references and DEA-solver software.} Second edition. Springer. New York.
+}
+\seealso{ \code{\link{dea.sbm.ccr}}}
+
+\keyword{ optimize }
+
