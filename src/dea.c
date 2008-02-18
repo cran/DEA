@@ -3,6 +3,10 @@
 // habitual en estadistica para las matrices de datos.
 //
 //   28/01/2008  versión inicial
+//   08/02/2008  corregido bug ("no" en lugar de "nD") en modelos dea.ccr.io.mul,
+//               dea.ccr.oo.mul, dea.bcc.io.mul, dea.bcc.oo.mul, dea.bcc.oo.env,
+//               dea.add.mul
+//   10/02/2008  añadida la opción del presolver
 
 #include <R.h>
 #include <stdio.h>
@@ -18,20 +22,27 @@
 /********************************************************/
 
 void ccr_io_mul (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
   // comienza la funcion ccr
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
   // numero de restricciones; debera ser nD+1
   int nR;
@@ -62,7 +73,8 @@ void ccr_io_mul (char  ** nombre_DMUs,
   double ar[1 + ne_max];
 
   LPX * lp;
-
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -83,7 +95,7 @@ void ccr_io_mul (char  ** nombre_DMUs,
 
     for ( j = ni+1 ; j <= ni+no ; j++){
 
-      restri = *( yy + ((j-ni-1) * no ) + (i-1));
+      restri = *( yy + ((j-ni-1) * nD ) + (i-1));
       
       if (restri != 0.0 ) {
 	ne = ne+1;
@@ -188,10 +200,24 @@ void ccr_io_mul (char  ** nombre_DMUs,
 
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex (lp);
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
 
@@ -222,19 +248,26 @@ void ccr_io_mul (char  ** nombre_DMUs,
 
 
 void ccr_io_env (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -278,6 +311,8 @@ void ccr_io_env (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -406,10 +441,24 @@ void ccr_io_env (char  ** nombre_DMUs,
     // elimino mensajes coñazo
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex ( lp );
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d; phase I: OK, %c %c %c %c; ", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d; phase I: FAULT; ", i );
+    }; 
 
     // extraigo la solucion
 
@@ -500,9 +549,24 @@ void ccr_io_env (char  ** nombre_DMUs,
 
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
     // aplico el simplex
 
-    lpx_simplex(lp);
+    rr = lpx_simplex ( lp );
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("phase II: OK, %c %c %c %c \n", kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("phase II: FAULT \n" );
+    }; 
 
     // extraigo la solucion
     // solo me interesan el valor de la funcion objetivo y
@@ -543,20 +607,27 @@ void ccr_io_env (char  ** nombre_DMUs,
 /*********************************************************/
 
 void ccr_oo_mul (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
   // comienza la funcion ccr
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
   // numero de restricciones; debera ser nD+1
   int nR;
@@ -589,6 +660,8 @@ void ccr_oo_mul (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -609,7 +682,7 @@ void ccr_oo_mul (char  ** nombre_DMUs,
 
     for ( j = ni+1 ; j <= ni+no ; j++){
 
-      restri = *( yy + ((j-ni-1) * no ) + (i-1));
+      restri = *( yy + ((j-ni-1) * nD ) + (i-1));
       
       if (restri != 0.0 ) {
 	ne = ne+1;
@@ -708,11 +781,34 @@ void ccr_oo_mul (char  ** nombre_DMUs,
     lpx_load_matrix(lp, nf, ia, ja, ar);
 
     // elimino mensajes coñazo
-    lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
+    lpx_set_int_parm ( lp , LPX_K_MSGLEV , 0 );
+
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV );
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // flag del scaling
+    //lpx_set_int_parm ( lp , LPX_K_SCALE , 2 );
+
+
+    // simplex iterations limit
+    //lpx_set_int_parm ( lp , LPX_K_ITLIM , 200 );
+
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex (lp);
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
 
@@ -743,19 +839,26 @@ void ccr_oo_mul (char  ** nombre_DMUs,
 
 
 void ccr_oo_env (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -799,7 +902,9 @@ void ccr_oo_env (char  ** nombre_DMUs,
 
   LPX * lp;
 
- 
+  LPXKKT  kkt;
+  int rr, scala; 
+
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
 
@@ -926,10 +1031,24 @@ void ccr_oo_env (char  ** nombre_DMUs,
     // elimino mensajes coñazo
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex ( lp );
+    
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d; phase I: OK, %c %c %c %c; ", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d; phase I: FAULT; ", i );
+    }; 
 
     // extraigo la solucion
 
@@ -1021,9 +1140,24 @@ void ccr_oo_env (char  ** nombre_DMUs,
 
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
     // aplico el simplex
 
-    lpx_simplex(lp);
+    rr = lpx_simplex ( lp );
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf (" phase II: OK, %c %c %c %c \n" , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf (" phase II: FAULT \n" );
+    }; 
 
     // extraigo la solucion
     // solo me interesan el valor de la funcion objetivo y
@@ -1063,20 +1197,27 @@ void ccr_oo_env (char  ** nombre_DMUs,
 /*********************************************************/
 
 void bcc_io_mul (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,  
+		 int    * information,
+		 double * zz) {
 
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
   // numero de restricciones; debera ser nD+1
   int nR;
@@ -1108,7 +1249,9 @@ void bcc_io_mul (char  ** nombre_DMUs,
 
   LPX * lp;
 
- 
+  LPXKKT  kkt;
+  int rr, scala; 
+
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
 
@@ -1128,7 +1271,7 @@ void bcc_io_mul (char  ** nombre_DMUs,
 
     for ( j = ni+1 ; j <= ni+no ; j++){
 
-      restri = *( yy + ((j-ni-1) * no ) + (i-1));
+      restri = *( yy + ((j-ni-1) * nD ) + (i-1));
       
       if (restri != 0.0 ) {
 	ne = ne+1;
@@ -1239,10 +1382,24 @@ void bcc_io_mul (char  ** nombre_DMUs,
 
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex (lp);
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
 
@@ -1274,19 +1431,26 @@ void bcc_io_mul (char  ** nombre_DMUs,
 
 
 void bcc_io_env (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -1330,6 +1494,8 @@ void bcc_io_env (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -1466,10 +1632,24 @@ void bcc_io_env (char  ** nombre_DMUs,
     // elimino mensajes coñazo
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex ( lp );
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d; phase I: OK, %c %c %c %c; ", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d; phase I: FAULT; ", i );
+    }; 
 
     // extraigo la solucion
 
@@ -1563,9 +1743,24 @@ void bcc_io_env (char  ** nombre_DMUs,
 
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
     // aplico el simplex
 
-    lpx_simplex(lp);
+    rr = lpx_simplex ( lp );
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("phase II: OK, %c %c %c %c \n" , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("phase II: FAULT \n" );
+    }; 
 
     // extraigo la solucion
     // solo me interesan el valor de la funcion objetivo y
@@ -1607,19 +1802,27 @@ void bcc_io_env (char  ** nombre_DMUs,
 /*********************************************************/
 
 void bcc_oo_mul (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
+
 
   // numero de restricciones; debera ser nD+1
   int nR;
@@ -1652,6 +1855,8 @@ void bcc_oo_mul (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -1672,7 +1877,7 @@ void bcc_oo_mul (char  ** nombre_DMUs,
 
     for ( j = ni+1 ; j <= ni+no ; j++){
 
-      restri = *( yy + ((j-ni-1) * no ) + (i-1));
+      restri = *( yy + ((j-ni-1) * nD ) + (i-1));
       
       if (restri != 0.0 ) {
 	ne = ne+1;
@@ -1781,9 +1986,33 @@ void bcc_oo_mul (char  ** nombre_DMUs,
     // elimino mensajes coñazo
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
-    // aplico el simplex
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+    
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
-    lpx_simplex (lp);
+    // pinto el problema para chequearlo
+    // if ( i == 1 )  lpx_print_prob ( lp , "/home/teresita/pru1.txt" ); 
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+    
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
+
+     /*
+     if ( lpx_get_status (lp)  == LPX_OPT )
+       Rprintf (" OK, \n" );
+     else
+       Rprintf (" FAULT, \n" );
+     */
 
     // extraigo la solucion
 
@@ -1814,19 +2043,26 @@ void bcc_oo_mul (char  ** nombre_DMUs,
 
 
 void bcc_oo_env (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,	 
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -1834,7 +2070,7 @@ void bcc_oo_env (char  ** nombre_DMUs,
   Rprintf("numero de outputs: %d \n",no);
 */
 
-  int i, j, k, s,t;
+  int i, j, k, s, t;
 
   char  tt[] = "L_";
   char  ss[256] ;
@@ -1869,6 +2105,12 @@ void bcc_oo_env (char  ** nombre_DMUs,
   double ar[1 + ne_max];
 
   LPX * lp;
+
+  LPXKKT  kkt;
+  int rr, scala;
+ 
+
+  //int n_it = 20;
 
  
   // establecemos la matriz de restricciones rellenando los 
@@ -1930,6 +2172,7 @@ void bcc_oo_env (char  ** nombre_DMUs,
     lp = lpx_create_prob();
     lpx_set_prob_name(lp, "dea_bcc_oo_env");
     lpx_set_obj_dir(lp,LPX_MAX);
+
 
     // añadimos filas, es decir, restricciones, al problema.
 
@@ -2000,18 +2243,46 @@ void bcc_oo_env (char  ** nombre_DMUs,
     // cargo ahora la matriz de restricciones
     lpx_load_matrix(lp, nf, ia, ja, ar);
 
+    lpx_reset_parms (lp );
+
     // elimino mensajes coñazo
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+    
+    // pinto el problema para chequearlo
+    //if ( i == 1 )  lpx_print_prob ( lp , "/home/teresita/pru1.txt" ); 
+
+    // establezco número máximo de iteraciones
+    //lpx_set_int_parm ( lp , LPX_K_ITLIM , n_it );
 
     // aplico el simplex
+    rr = lpx_simplex ( lp );
 
-    lpx_simplex (lp);
+   if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d; phase I: OK, %c %c %c %c; ", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d; phase II: FAULT; ", i );
+    }; 
+
+    // chequeo
+    //Rprintf("primera etapa; %d \n",i);
+    
 
     // extraigo la solucion
 
     teta = lpx_get_obj_val (lp);
     *(zz + (i-1) + nD * nD ) = teta ;
+
+    // chequeo teta
+    //Rprintf("teta: %f \n", teta);
 
     lpx_delete_prob (lp);
 
@@ -2025,6 +2296,8 @@ void bcc_oo_env (char  ** nombre_DMUs,
     lp = lpx_create_prob();
     lpx_set_prob_name (lp , "dea_bcc_oo_env_2");
     lpx_set_obj_dir (lp , LPX_MAX);
+
+
 
     // añado las filas, que van a ser ni+no+1, les doy nombre
     // y establezco sus limites
@@ -2097,13 +2370,40 @@ void bcc_oo_env (char  ** nombre_DMUs,
 
     lpx_load_matrix (lp , nf , ia , ja , ar );
 
-    // elimino mensajes coñazo
+    lpx_reset_parms (lp );
 
+    // elimino mensajes coñazo
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
-    // aplico el simplex
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
 
-    lpx_simplex(lp);
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // chequeo
+    //lpx_print_prob ( lp , "/home/teresita/pru*.txt" );
+
+
+    // otro chequeo
+    //Rprintf("segunda etapa; %d \n",i);
+
+    // establezco número máximo de iteraciones
+    //lpx_set_int_parm ( lp , LPX_K_ITLIM , n_it );
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("phase II: OK, %c %c %c %c \n", kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("phase II: FAULT \n" );
+    }; 
+
+    //Rprintf("ok tras simplex\n");
 
     // extraigo la solucion
     // solo me interesan el valor de la funcion objetivo y
@@ -2145,20 +2445,27 @@ void bcc_oo_env (char  ** nombre_DMUs,
 /*********************************************************/
 
 void add_mul (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+	      int    * numero_DMUs,
+	      char  ** nombre_inputs,
+	      int    * numero_inputs,
+	      char  ** nombre_outputs,
+	      int    * numero_outputs,
+	      double * xx,
+	      double * yy,
+	      int    * presolver,
+	      int    * dual_simplex,
+	      int    * information,
+	      double * zz) {
 
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -2187,6 +2494,8 @@ void add_mul (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -2207,7 +2516,7 @@ void add_mul (char  ** nombre_DMUs,
 
     for ( j = ni+1 ; j <= ni+no ; j++){
 
-      restri = *( yy + ((j-ni-1) * no ) + (i-1));
+      restri = *( yy + ((j-ni-1) * nD ) + (i-1));
       
       if (restri != 0.0 ) {
 	ne = ne+1;
@@ -2300,10 +2609,24 @@ void add_mul (char  ** nombre_DMUs,
 
     lpx_set_int_parm ( lp , LPX_K_MSGLEV , 1);
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
 
     // aplico el simplex
 
-    lpx_simplex (lp);
+    rr = lpx_simplex (lp);
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
 
@@ -2335,19 +2658,26 @@ void add_mul (char  ** nombre_DMUs,
 
 
 void add_env (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+	      int    * numero_DMUs,
+	      char  ** nombre_inputs,
+	      int    * numero_inputs,
+	      char  ** nombre_outputs,
+	      int    * numero_outputs,
+	      double * xx,
+	      double * yy,
+	      int    * presolver,
+	      int    * dual_simplex,
+	      int    * information,
+	      double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -2390,6 +2720,8 @@ void add_env (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -2522,9 +2854,24 @@ void add_env (char  ** nombre_DMUs,
 
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
     // aplico el simplex
 
-    lpx_simplex(lp);
+    rr = lpx_simplex(lp);
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
     // solo me interesan el valor de la funcion objetivo y
@@ -2566,19 +2913,26 @@ void add_env (char  ** nombre_DMUs,
 
 
 void sbm_ccr (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+	      int    * numero_DMUs,
+	      char  ** nombre_inputs,
+	      int    * numero_inputs,
+	      char  ** nombre_outputs,
+	      int    * numero_outputs,
+	      double * xx,
+	      double * yy,
+	      int    * presolver,
+	      int    * dual_simplex,
+	      int    * information,
+	      double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -2622,7 +2976,9 @@ void sbm_ccr (char  ** nombre_DMUs,
 
   LPX * lp;
 
- 
+  LPXKKT  kkt;
+  int rr, scala; 
+
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
 
@@ -2811,12 +3167,25 @@ void sbm_ccr (char  ** nombre_DMUs,
     lpx_load_matrix (lp , nf , ia , ja , ar );
 
     // elimino mensajes coñazo
-
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
-    // aplico el simplex
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
 
-    lpx_simplex(lp);
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+    
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
     // el valor de la funcion objetivo ("ro") se va a la ultima columna
@@ -2845,7 +3214,6 @@ void sbm_ccr (char  ** nombre_DMUs,
 
     lpx_delete_prob(lp);
     
-    /***********  acaba la segunda etapa   ***************/
 
 
   }
@@ -2869,19 +3237,26 @@ void sbm_ccr (char  ** nombre_DMUs,
 
 
 void sbm_bcc (char  ** nombre_DMUs,
-	  int    * numero_DMUs,
-	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+	      int    * numero_DMUs,
+	      char  ** nombre_inputs,
+	      int    * numero_inputs,
+	      char  ** nombre_outputs,
+	      int    * numero_outputs,
+	      double * xx,
+	      double * yy,
+	      int    * presolver,
+	      int    * dual_simplex,
+	      int    * information,
+	      double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -2925,6 +3300,8 @@ void sbm_bcc (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -3120,16 +3497,29 @@ void sbm_bcc (char  ** nombre_DMUs,
     lpx_set_obj_coef (lp , nD+ni+no+1 ,1.0 );
 
     // cargo la matriz de restricciones
-
     lpx_load_matrix (lp , nf , ia , ja , ar );
 
     // elimino mensajes coñazo
-
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
-    // aplico el simplex
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
 
-    lpx_simplex(lp);
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+    
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
     // el valor de la funcion objetivo ("ro") se va a la ultima columna
@@ -3182,19 +3572,26 @@ void sbm_bcc (char  ** nombre_DMUs,
 
 
 void sbm_ccr_io (char  ** nombre_DMUs,
-          int    * numero_DMUs,
- 	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -3238,6 +3635,8 @@ void sbm_ccr_io (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -3375,18 +3774,29 @@ void sbm_ccr_io (char  ** nombre_DMUs,
     lpx_set_obj_coef (lp , 0 , 1.0 );
 
     // cargo la matriz de restricciones
-
     lpx_load_matrix (lp , ne , ia , ja , ar );
 
     // elimino mensajes coñazo
-
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
-    // aplico el simplex
-    
-    //lpx_print_prob(lp,"caca");
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
 
-    lpx_simplex(lp);
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+    
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
     // el valor de la funcion objetivo ("ro.in") se va a la ultima columna
@@ -3440,12 +3850,19 @@ void sbm_ccr_io (char  ** nombre_DMUs,
 	           int    * numero_outputs,
 	           double * xx,
 	           double * yy,
+		   int    * presolver,
+		   int    * dual_simplex,
+		   int    * information,
 	           double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -3489,7 +3906,9 @@ void sbm_ccr_io (char  ** nombre_DMUs,
 
   LPX * lp;
 
- 
+  LPXKKT  kkt;
+  int rr, scala; 
+
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
 
@@ -3634,18 +4053,29 @@ void sbm_ccr_io (char  ** nombre_DMUs,
     lpx_set_obj_coef (lp , 0 , 1.0 );
 
     // cargo la matriz de restricciones
-
     lpx_load_matrix (lp , ne , ia , ja , ar );
 
     // elimino mensajes coñazo
-
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
-    // aplico el simplex
-    
-    //lpx_print_prob(lp,"caca");
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
 
-    lpx_simplex(lp);
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+    
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
     // el valor de la funcion objetivo ("ro.in") se va a la ultima columna
@@ -3694,19 +4124,26 @@ void sbm_ccr_io (char  ** nombre_DMUs,
 
 
 void sbm_ccr_oo (char  ** nombre_DMUs,
-          int    * numero_DMUs,
- 	  char  ** nombre_inputs,
-	  int    * numero_inputs,
-	  char  ** nombre_outputs,
-	  int    * numero_outputs,
-	  double * xx,
-	  double * yy,
-	  double * zz) {
+		 int    * numero_DMUs,
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -3750,6 +4187,8 @@ void sbm_ccr_oo (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -3884,19 +4323,30 @@ void sbm_ccr_oo (char  ** nombre_DMUs,
     lpx_set_obj_coef (lp , 0 , 1.0 ); 
 
     // cargo la matriz de restricciones
-
     lpx_load_matrix (lp , ne , ia , ja , ar );
 
     // elimino mensajes coñazo
-
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
+
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
     // aplico el simplex
+    rr = lpx_simplex ( lp );
     
-    //lpx_print_prob(lp,"caca");
 
-    lpx_simplex(lp);
-
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
+    
     // extraigo la solucion
     // el valor de la funcion objetivo ("ro.out") se va a la ultima columna
     // luego tendré que invertirlo
@@ -3944,18 +4394,25 @@ void sbm_ccr_oo (char  ** nombre_DMUs,
 
 void sbm_bcc_oo (char  ** nombre_DMUs,
                  int    * numero_DMUs,
- 	             char  ** nombre_inputs,
-	             int    * numero_inputs,
-	             char  ** nombre_outputs,
-	             int    * numero_outputs,
-	             double * xx,
-	             double * yy,
-	             double * zz) {
+		 char  ** nombre_inputs,
+		 int    * numero_inputs,
+		 char  ** nombre_outputs,
+		 int    * numero_outputs,
+		 double * xx,
+		 double * yy,
+		 int    * presolver,
+		 int    * dual_simplex,
+		 int    * information,
+		 double * zz) {
 
 
   int nD = * numero_DMUs;
   int ni = * numero_inputs;
   int no = * numero_outputs;
+
+  int PSLV = * presolver;
+  int DUAL = * dual_simplex;
+  int INFR = * information;
 
 /*
   Rprintf("numero de DMUs: %d \n",nD);
@@ -3999,6 +4456,8 @@ void sbm_bcc_oo (char  ** nombre_DMUs,
 
   LPX * lp;
 
+  LPXKKT  kkt;
+  int rr, scala;
  
   // establecemos la matriz de restricciones rellenando los 
   // arrays ia, ja, ar
@@ -4143,18 +4602,29 @@ void sbm_bcc_oo (char  ** nombre_DMUs,
     lpx_set_obj_coef (lp , 0 , 1.0 );
 
     // cargo la matriz de restricciones
-
     lpx_load_matrix (lp , ne , ia , ja , ar );
 
     // elimino mensajes coñazo
-
     lpx_set_int_parm (lp , LPX_K_MSGLEV , 1 );
 
-    // aplico el simplex
-    
-    //lpx_print_prob(lp,"caca");
+    // flag del presolver
+    lpx_set_int_parm ( lp , LPX_K_PRESOL , PSLV);
 
-    lpx_simplex(lp);
+    // dual simplex
+    lpx_set_int_parm ( lp , LPX_K_DUAL , DUAL );
+
+    // aplico el simplex
+    rr = lpx_simplex ( lp );
+    
+
+    if ( INFR != 0 ) {
+      if ( lpx_get_status ( lp ) == LPX_OPT ) { 
+	lpx_check_kkt ( lp , 1 , &kkt );
+	Rprintf ("problem %d: OK, %c %c %c %c \n", i , kkt.pe_quality , kkt.pb_quality , kkt.de_quality , kkt.db_quality );
+      }
+      else
+	Rprintf ("problem %d: FAULT \n", i );
+    }; 
 
     // extraigo la solucion
     // el valor de la funcion objetivo ("ro.out") se va a la ultima columna

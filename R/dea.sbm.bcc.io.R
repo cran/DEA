@@ -1,9 +1,21 @@
 `dea.sbm.bcc.io` <-
-function (X, Y) {
+function (X, Y, pslv = FALSE , dual = FALSE , infor = FALSE ) {
 
   X <- .primera (X);
   Y <- .segunda (Y);
   .check(X,Y);
+  
+  pslv <- as.logical (pslv );
+  presolver <- 0;
+  if ( pslv ) presolver <- 1;
+
+  dual <- as.logical ( dual );
+  dual.simplex <- 0;
+  if ( dual ) dual.simplex <- 1;
+  
+  infor <- as.logical ( infor );
+  information <- 0;
+  if ( infor ) information <- 1;
   
   nombre.DMUs <- row.names(X);
   nombre.inputs <- names(X);
@@ -27,6 +39,9 @@ function (X, Y) {
               as.integer (num.outputs),
               as.double (XX),
               as.double (YY),
+	      as.integer (presolver),
+              as.integer (dual.simplex),
+              as.integer (information),
               salida = as.double (ZZ),
 	      PACKAGE = "DEA");
 
